@@ -6,6 +6,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 import json
 import ast
+from backend.prompts import SUMMARIZER_PROMPT
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +29,7 @@ def create_output_summarizer(nano_llm: ChatOpenAI) -> Callable[[str, str], dict]
         # Extract URLs, favicons, and content
         urls = []
         favicons = []
-        content = ""
+        content_parts = []
         
         if isinstance(parsed_output, dict) and 'results' in parsed_output:
             items = parsed_output['results']
@@ -39,21 +40,26 @@ def create_output_summarizer(nano_llm: ChatOpenAI) -> Callable[[str, str], dict]
         
         # Extract URLs, favicons and combine content
         for item in items:
-            if isinstance(item, dict) and 'url' in item and 'raw_content' in item:
-                urls.append(item['url'])
-                favicons.append(item['favicon'])
+            if isinstance(item, dict):
+                if 'url' in item:
+                    urls.append(item['url'])
+                if 'favicon' in item:
+                    favicons.append(item['favicon'])
+                # Extract content from various possible fields
+                content_text = ""
+                if 'content' in item:
+                    content_text = item['content']
+                elif 'raw_content' in item:
+                    content_text = item['raw_content']
+                elif 'summary' in item:
+                    content_text = item['summary']
+                content_parts.append(content_text)
         
-        # Generate summary
-        summary_prompt = f"""
-        Summarize the following content into a relevant format that helps answer the user's question.
-        Focus on the key information that would be most useful for answering: {user_message}
-        Remove redundant information and highlight the most important findings.
+        # Combine all content
+        content = "\n\n".join(content_parts)
         
-        Content:
-        {content}
-        
-        Provide a clear, organized summary that captures the essential information relevant to the user's question:
-        """
+        # Generate summary using the prompt from prompts.py
+        summary_prompt = SUMMARIZER_PROMPT.format(user_message=user_message, content=content)
         
         summary = nano_llm.invoke(summary_prompt).content
         

@@ -34,7 +34,6 @@ SIMPLE_PROMPT = f"""
         - Action Input should be a URL (e.g., ["https://tavily.com/blog"]) or a list of URLs (e.g., ["https://tavily.com/blog", "https://tavily.com/blog/2"]) depending on the user's request and context.
         - IMPORTANT GUIDELINES: you should never do two extracts in a row! If you need to extract more than one page, you should provide all the urls in the Action Input.
 
-
         Use the following format:
 
         Question: the input question you must answer
@@ -49,11 +48,42 @@ SIMPLE_PROMPT = f"""
         Begin!
 
         ---
-
+        
         You will now receive a message from the user:
-
+        
         """
-REASONING_PROMPT = f"""    
+
+ROUTING_PROMPT = f"""You are an intelligent query classifier that determines the complexity level of user questions to route them to the appropriate agent.
+
+Today's Date: {datetime.datetime.today().strftime("%A, %B %d, %Y")}
+
+Your task is to analyze the user's question and classify it as either "fast" or "deep" based on the following criteria:
+
+Classify as "fast" if the query is:
+- Simple factual questions (e.g., "What is the capital of France?")
+- Basic definitions (e.g., "Define photosynthesis")
+- Straightforward calculations (e.g., "What is 15% of 200?")
+- Current weather or basic information lookup
+- Simple comparisons (e.g., "Which is bigger, Earth or Mars?")
+- Basic translation requests
+- Simple recommendations (e.g., "Recommend a good restaurant in NYC")
+
+Classify as "deep" if the query is:
+- Complex analytical questions requiring reasoning (e.g., "Analyze the impact of climate change on global agriculture")
+- Multi-step problem solving (e.g., "How can I improve my website's SEO ranking?")
+- Research requests requiring comprehensive information gathering
+- Questions requiring synthesis of information from multiple sources
+- Complex comparisons with detailed analysis
+- Requests for detailed explanations of complex topics
+- Questions about current events requiring recent information and analysis
+- Coding problems requiring implementation
+
+Respond ONLY with either "fast" or "deep" - nothing else.
+
+User query: {{query}}
+"""
+
+REASONING_PROMPT = f"""
         You are a friendly conversational research assistant created by the company Tavily. 
         Your mission is to conduct comprehensive, thorough, accurate, and up-to-date research, grounding your findings in credible web data.
         
@@ -108,7 +138,18 @@ REASONING_PROMPT = f"""
         Begin!
 
         ---
-
+        
         You will now receive a message from the user:
-
+        
         """
+
+SUMMARIZER_PROMPT = f"""
+Summarize the following content into a relevant format that helps answer the user's question.
+Focus on the key information that would be most useful for answering: {{user_message}}
+Remove redundant information and highlight the most important findings. Provide a comprehensive list of references at the very end.
+
+Content:
+{{content}}
+
+Provide a clear, organized summary that captures the essential information relevant to the user's question:
+"""
