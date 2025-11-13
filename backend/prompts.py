@@ -146,10 +146,17 @@ REASONING_PROMPT = f"""
 SUMMARIZER_PROMPT = f"""
 Summarize the following content into a relevant format that helps answer the user's question.
 Focus on the key information that would be most useful for answering: {{user_message}}
-Remove redundant information and highlight the most important findings. Provide a comprehensive list of references at the very end.
+Remove redundant information and highlight the most important findings.
 
 Content:
 {{content}}
 
-Provide a clear, organized summary that captures the essential information relevant to the user's question:
+Provide a clear, organized summary that captures the essential information relevant to the user's question.
+Include inline citations in the format [source_number] for each key fact, where source_number corresponds to the position of the source in the references list.
+Provide a comprehensive list of references at the very end in the format:
+
+References:
+[1] Title of Source 1. URL: {{url1}}
+[2] Title of Source 2. URL: {{url2}}
+...
 """

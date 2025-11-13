@@ -59,7 +59,16 @@ def create_output_summarizer(nano_llm: ChatOpenAI) -> Callable[[str, str], dict]
         content = "\n\n".join(content_parts)
         
         # Generate summary using the prompt from prompts.py
-        summary_prompt = SUMMARIZER_PROMPT.format(user_message=user_message, content=content)
+        # Create a formatted content string with URLs for citation
+        formatted_content = content
+        if urls:
+            # Add URLs to the content for the LLM to reference
+            url_references = "\n\nSource URLs:\n"
+            for i, url in enumerate(urls, 1):
+                url_references += f"{i}. {url}\n"
+            formatted_content += url_references
+        
+        summary_prompt = SUMMARIZER_PROMPT.format(user_message=user_message, content=formatted_content)
         
         summary = nano_llm.invoke(summary_prompt).content
         

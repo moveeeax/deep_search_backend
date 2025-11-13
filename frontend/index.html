@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Поиск информации</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Подключаем библиотеку marked.js для рендеринга markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <div class="container">
+        <h1>Поиск информации</h1>
+        <form id="searchForm">
+            <div class="form-group">
+                <label for="query">Введите ваш вопрос:</label>
+                <input type="text" id="query" name="query" required>
+            </div>
+            <div class="form-group">
+                <label for="agentType">Тип агента:</label>
+                <select id="agentType" name="agentType">
+                    <option value="auto">Автоматически</option>
+                    <option value="fast">Быстрый</option>
+                    <option value="deep">Глубокий</option>
+                </select>
+            </div>
+            <button type="submit">Отправить запрос</button>
+        </form>
+        <div id="loading" class="hidden">Загрузка...</div>
+        <div id="result" class="result hidden"></div>
+    </div>
+    <!-- Загружаем переменные окружения -->
+    <script src="env.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
