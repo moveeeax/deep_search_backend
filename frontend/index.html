@@ -3,34 +3,152 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Поиск информации</title>
+    <title>Research Pro Mode - Расширенный Поиск</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <!-- Подключаем библиотеку marked.js для рендеринга markdown -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <div class="container">
-        <h1>Поиск информации</h1>
-        <form id="searchForm">
-            <div class="form-group">
-                <label for="query">Введите ваш вопрос:</label>
-                <input type="text" id="query" name="query" required>
+        <header>
+            <h1><i class="fas fa-search"></i> Research Pro Mode</h1>
+            <p>Продвинутый поисковый ассистент с проверкой фактов</p>
+        </header>
+
+        <div class="mode-selector">
+            <h2>Выберите режим поиска:</h2>
+            <div class="mode-buttons">
+                <button id="fast-mode" class="mode-btn active" data-mode="fast">
+                    <i class="fas fa-bolt"></i>
+                    <span>Быстрый поиск</span>
+                    <small>ChatGPT-стиль, мгновенные ответы</small>
+                </button>
+                
+                <button id="deep-mode" class="mode-btn" data-mode="deep">
+                    <i class="fas fa-brain"></i>
+                    <span>Глубокий анализ</span>
+                    <small>Многошаговое рассуждение и проверка фактов</small>
+                </button>
+                
+                <button id="social-mode" class="mode-btn" data-mode="social">
+                    <i class="fas fa-hashtag"></i>
+                    <span>Социальный анализ</span>
+                    <small>Анализ мнений из Reddit, X, VK, Habr</small>
+                </button>
+                
+                <button id="academic-mode" class="mode-btn" data-mode="academic">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>Академический поиск</span>
+                    <small>Поиск в arXiv / Semantic Scholar</small>
+                </button>
+                
+                <button id="finance-mode" class="mode-btn" data-mode="finance">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Финансовый анализ</span>
+                    <small>Данные из Yahoo Finance / TradingView</small>
+                </button>
             </div>
-            <div class="form-group">
-                <label for="agentType">Тип агента:</label>
-                <select id="agentType" name="agentType">
-                    <option value="auto">Автоматически</option>
-                    <option value="fast">Быстрый</option>
-                    <option value="deep">Глубокий</option>
-                </select>
+        </div>
+
+        <div class="search-container">
+            <form id="search-form">
+                <div class="input-group">
+                    <input type="text" id="query-input" placeholder="Введите ваш запрос..." required>
+                    <button type="submit" id="search-button">
+                        <i class="fas fa-search"></i> Поиск
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Анализируем информацию...</p>
+        </div>
+
+        <div class="results-container" id="results-container" style="display: none;">
+            <div class="result-header">
+                <h2>Результаты поиска</h2>
+                <div class="mode-indicator" id="mode-indicator">
+                    <span id="current-mode">Быстрый поиск</span>
+                </div>
             </div>
-            <button type="submit">Отправить запрос</button>
-        </form>
-        <div id="loading" class="hidden">Загрузка...</div>
-        <div id="result" class="result hidden"></div>
+            
+            <div class="response-content" id="response-content">
+                <!-- Ответ будет здесь -->
+            </div>
+            
+            <div class="sources-section" id="sources-section" style="display: none;">
+                <h3><i class="fas fa-link"></i> Источники</h3>
+                <ul id="sources-list">
+                    <!-- Источники будут здесь -->
+                </ul>
+            </div>
+            
+            <div class="fact-check-section" id="fact-check-section" style="display: none;">
+                <h3><i class="fas fa-check-circle"></i> Заметки проверки фактов</h3>
+                <div id="fact-check-notes">
+                    <!-- Заметки проверки фактов будут здесь -->
+                </div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h2>О режимах поиска</h2>
+            <div class="info-cards">
+                <div class="info-card">
+                    <h3><i class="fas fa-bolt"></i> Быстрый поиск</h3>
+                    <p>Идеален для простых вопросов, где требуется мгновенный ответ. Минимальная обработка для максимальной скорости.</p>
+                    <ul>
+                        <li>Минимальные накладные расходы на обработку</li>
+                        <li>Идеально подходит для простых одноадресных запросов</li>
+                        <li>Быстрое время отклика</li>
+                    </ul>
+                </div>
+                
+                <div class="info-card">
+                    <h3><i class="fas fa-brain"></i> Глубокий анализ</h3>
+                    <p>Продвинутый "исследователь", который выполняет многошаговое рассуждение, собирает данные с разных сайтов и проверяет факты.</p>
+                    <ul>
+                        <li>Комплексный веб-скрапинг</li>
+                        <li>Семантическая переоценка результатов</li>
+                        <li>Расширенная постобработка данных</li>
+                        <li>Проверка достоверности с несколькими источниками</li>
+                    </ul>
+                </div>
+                
+                <div class="info-card">
+                    <h3><i class="fas fa-hashtag"></i> Социальный анализ</h3>
+                    <p>Анализ мнений и трендов с платформ социальных сетей.</p>
+                    <ul>
+                        <li>Reddit, X (Twitter), VK, Habr</li>
+                        <li>Анализ настроений и общественного мнения</li>
+                        <li>Выявление трендовых тем</li>
+                    </ul>
+                </div>
+                
+                <div class="info-card">
+                    <h3><i class="fas fa-graduation-cap"></i> Академический поиск</h3>
+                    <p>Поиск в академических базах данных и научных публикациях.</p>
+                    <ul>
+                        <li>arXiv, Semantic Scholar</li>
+                        <li>Рецензируемые научные статьи</li>
+                        <li>Методологии исследований и выводы</li>
+                    </ul>
+                </div>
+                
+                <div class="info-card">
+                    <h3><i class="fas fa-chart-line"></i> Финансовый анализ</h3>
+                    <p>Анализ финансовых данных и рыночных трендов.</p>
+                    <ul>
+                        <li>Yahoo Finance, Bloomberg, Reuters</li>
+                        <li>Цены акций и экономические индикаторы</li>
+                        <li>Финансовые отчеты и рыночный анализ</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
     </div>
-    <!-- Загружаем переменные окружения -->
-    <script src="env.js"></script>
+
     <script src="script.js"></script>
 </body>
 </html>

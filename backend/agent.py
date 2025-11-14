@@ -1,167 +1,333 @@
-import logging
-from typing import Callable
+import os
+from typing import Dict, Any, List, Optional
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
-from langchain_tavily import TavilyCrawl, TavilyExtract, TavilySearch
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
-import json
-import ast
-from backend.prompts import SUMMARIZER_PROMPT
+from langchain_anthropic import ChatAnthropic
+from tavily import TavilyClient
+from backend.prompts import (
+    SIMPLE_PROMPT,
+    REASONING_PROMPT,
+    SOCIAL_PROMPT,
+    ACADEMIC_PROMPT,
+    FINANCE_PROMPT,
+    SUMMARIZER_PROMPT
+)
+from backend.utils import aggregate_and_summarize
+from langchain_tavily import TavilySearch, TavilyExtract, TavilyCrawl
+from typing_extensions import TypedDict
+from langgraph.graph.message import add_messages
+from typing import Annotated
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-def create_output_summarizer(nano_llm: ChatOpenAI) -> Callable[[str, str], dict]:
-    def summarize_output(tool_output: str, user_message: str = "") -> dict:
-        if not tool_output or tool_output.strip() == "":
-            return {"summary": tool_output, "urls": []}
-
-        try:
-            parsed_output = json.loads(tool_output)
-        except (json.JSONDecodeError, TypeError):
-            try:
-                parsed_output = ast.literal_eval(tool_output)
-            except (ValueError, SyntaxError):
-                return {"summary": tool_output, "urls": []}
-
-        # Extract URLs, favicons, and content
-        urls = []
-        favicons = []
-        content_parts = []
-        
-        if isinstance(parsed_output, dict) and 'results' in parsed_output:
-            items = parsed_output['results']
-        elif isinstance(parsed_output, list):
-            items = parsed_output
-        else:
-            return {"summary": tool_output, "urls": [], "favicons": []}
-        
-        # Extract URLs, favicons and combine content
-        for item in items:
-            if isinstance(item, dict):
-                if 'url' in item:
-                    urls.append(item['url'])
-                if 'favicon' in item:
-                    favicons.append(item['favicon'])
-                # Extract content from various possible fields
-                content_text = ""
-                if 'content' in item:
-                    content_text = item['content']
-                elif 'raw_content' in item:
-                    content_text = item['raw_content']
-                elif 'summary' in item:
-                    content_text = item['summary']
-                content_parts.append(content_text)
-        
-        # Combine all content
-        content = "\n\n".join(content_parts)
-        
-        # Generate summary using the prompt from prompts.py
-        # Create a formatted content string with URLs for citation
-        formatted_content = content
-        if urls:
-            # Add URLs to the content for the LLM to reference
-            url_references = "\n\nSource URLs:\n"
-            for i, url in enumerate(urls, 1):
-                url_references += f"{i}. {url}\n"
-            formatted_content += url_references
-        
-        summary_prompt = SUMMARIZER_PROMPT.format(user_message=user_message, content=formatted_content)
-        
-        summary = nano_llm.invoke(summary_prompt).content
-        
-        return {"summary": summary, "urls": urls, "favicons": favicons}
-    
-    return summarize_output
-
+class State(TypedDict):
+    messages: Annotated[list, add_messages]
 
 class WebAgent:
-    def __init__(
-        self,
-        checkpointer: MemorySaver = None,
-    ):
-        self.checkpointer = checkpointer
+    """
+    Агент для веб-поиска с несколькими режимами:
+    - Быстрый поиск (simple)
+    - Глубокий анализ (deep/reasoning)
+    - Социальный анализ (social)
+    - Академический поиск (academic)
+    - Финансовый анализ (finance)
+    """
+    
+    def __init__(self, model_type: str = "openai"):
+        self.model_type = model_type
+        self.tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+        
+        # Инициализация модели в зависимости от типа
+        if model_type == "anthropic":
+            self.model = ChatAnthropic(
+                model="claude-3-5-sonnet-20240620",
+                temperature=0,
+                max_tokens=4096,
+                api_key=os.getenv("ANTHROPIC_API_KEY")
+            )
+        else:
+            # Для OpenAI используем модель из переменных окружения или по умолчанию
+            model_name = os.getenv("NANO_MODEL", "gpt-3.5-turbo")
+            self.model = ChatOpenAI(
+                model=model_name,
+                temperature=0,
+                max_tokens=4096,
+                api_key=os.getenv("OPENAI_API_KEY"),
+                base_url=os.getenv("OPENAI_BASE_URL") if os.getenv("OPENAI_BASE_URL") else None
+            )
 
-    def build_graph(self, api_key: str, llm: ChatOpenAI, prompt: str, summary_llm: ChatOpenAI, user_message: str = ""):
+    def _get_model_with_tools(self, tools):
+        """Получить модель с привязанными инструментами"""
+        return self.model.bind_tools(tools)
+
+    def build_graph(self) -> StateGraph:
         """
-        Build and compile the LangGraph workflow.
+        Создать граф для стандартного режима (быстрый поиск или глубокий анализ)
+        """
+        from langgraph.prebuilt import ToolNode
+        
+        # Определение инструментов для стандартного режима
+        tools = [
+            TavilySearch(),
+            TavilyExtract(),
+            TavilyCrawl()
+        ]
+        
+        tool_node = ToolNode(tools)
+        model_with_tools = self._get_model_with_tools(tools)
+        
+        # Определение состояния графа
+        workflow = StateGraph(State)
+        
+        # Добавление узлов
+        def call_model(state: State) -> dict:
+            messages = state["messages"]
+            response = model_with_tools.invoke(messages)
+            return {"messages": [response]}
+            
+        workflow.add_node("agent", call_model)
+        workflow.add_node("tools", tool_node)
+        
+        # Добавление ребер
+        workflow.add_edge("tools", "agent")
+        
+        # Условное ребро для определения, нужно ли использовать инструменты
+        def should_continue(state: dict) -> str:
+            messages = state["messages"]
+            last_message = messages[-1]
+            if hasattr(last_message, 'tool_calls') and len(last_message.tool_calls) > 0:
+                return "tools"
+            return END
+            
+        workflow.add_conditional_edges(
+            "agent",
+            should_continue,
+            {
+                "tools": "tools",
+                END: END
+            }
+        )
+        
+        # Установка начального узла
+        workflow.set_entry_point("agent")
+        
+        return workflow
+    
+    def build_social_graph(self) -> StateGraph:
+        """
+        Создать граф для социального анализа
+        """
+        from langgraph.prebuilt import ToolNode
+        
+        # Инструменты для социального анализа (с фокусом на социальные платформы)
+        tools = [
+            TavilySearch(
+                include_domains=["reddit.com", "twitter.com", "x.com", "vk.com", "habr.com"],
+                time_range="week"
+            ),
+            TavilyExtract(),
+            TavilyCrawl()
+        ]
+        
+        tool_node = ToolNode(tools)
+        model_with_tools = self._get_model_with_tools(tools)
+        
+        # Определение состояния графа
+        workflow = StateGraph(State)
+        
+        # Добавление узлов
+        def call_model(state: State) -> dict:
+            messages = state["messages"]
+            response = model_with_tools.invoke(messages)
+            return {"messages": [response]}
+            
+        workflow.add_node("agent", call_model)
+        workflow.add_node("tools", tool_node)
+        
+        # Добавление ребер
+        workflow.add_edge("tools", "agent")
+        
+        # Условное ребро для определения, нужно ли использовать инструменты
+        def should_continue(state: dict) -> str:
+            messages = state["messages"]
+            last_message = messages[-1]
+            if hasattr(last_message, 'tool_calls') and len(last_message.tool_calls) > 0:
+                return "tools"
+            return END
+            
+        workflow.add_conditional_edges(
+            "agent",
+            should_continue,
+            {
+                "tools": "tools",
+                END: END
+            }
+        )
+        
+        # Установка начального узла
+        workflow.set_entry_point("agent")
+        
+        return workflow
+    
+    def build_academic_graph(self) -> StateGraph:
+        """
+        Создать граф для академического поиска
+        """
+        from langgraph.prebuilt import ToolNode
+        
+        # Инструменты для академического поиска (с фокусом на академические источники)
+        tools = [
+            TavilySearch(
+                include_domains=["arxiv.org", "semanticscholar.org"],
+                time_range="year"
+            ),
+            TavilyExtract(),
+            TavilyCrawl()
+        ]
+        
+        tool_node = ToolNode(tools)
+        model_with_tools = self._get_model_with_tools(tools)
+        
+        # Определение состояния графа
+        workflow = StateGraph(State)
+        
+        # Добавление узлов
+        def call_model(state: State) -> dict:
+            messages = state["messages"]
+            response = model_with_tools.invoke(messages)
+            return {"messages": [response]}
+            
+        workflow.add_node("agent", call_model)
+        workflow.add_node("tools", tool_node)
+        
+        # Добавление ребер
+        workflow.add_edge("tools", "agent")
+        
+        # Условное ребро для определения, нужно ли использовать инструменты
+        def should_continue(state: dict) -> str:
+            messages = state["messages"]
+            last_message = messages[-1]
+            if hasattr(last_message, 'tool_calls') and len(last_message.tool_calls) > 0:
+                return "tools"
+            return END
+            
+        workflow.add_conditional_edges(
+            "agent",
+            should_continue,
+            {
+                "tools": "tools",
+                END: END
+            }
+        )
+        
+        # Установка начального узла
+        workflow.set_entry_point("agent")
+        
+        return workflow
+    
+    def build_finance_graph(self) -> StateGraph:
+        """
+        Создать граф для финансового анализа
+        """
+        from langgraph.prebuilt import ToolNode
+        
+        # Инструменты для финансового анализа (с фокусом на финансовые источники)
+        tools = [
+            TavilySearch(
+                topic="finance",
+                include_domains=["finance.yahoo.com", "bloomberg.com", "reuters.com"],
+                time_range="day"
+            ),
+            TavilyExtract(),
+            TavilyCrawl()
+        ]
+        
+        tool_node = ToolNode(tools)
+        model_with_tools = self._get_model_with_tools(tools)
+        
+        # Определение состояния графа
+        workflow = StateGraph(State)
+        
+        # Добавление узлов
+        def call_model(state: State) -> dict:
+            messages = state["messages"]
+            response = model_with_tools.invoke(messages)
+            return {"messages": [response]}
+            
+        workflow.add_node("agent", call_model)
+        workflow.add_node("tools", tool_node)
+        
+        # Добавление ребер
+        workflow.add_edge("tools", "agent")
+        
+        # Условное ребро для определения, нужно ли использовать инструменты
+        def should_continue(state: dict) -> str:
+            messages = state["messages"]
+            last_message = messages[-1]
+            if hasattr(last_message, 'tool_calls') and len(last_message.tool_calls) > 0:
+                return "tools"
+            return END
+            
+        workflow.add_conditional_edges(
+            "agent",
+            should_continue,
+            {
+                "tools": "tools",
+                END: END
+            }
+        )
+        
+        # Установка начального узла
+        workflow.set_entry_point("agent")
+        
+        return workflow
+
+    def run(self, query: str, mode: str = "fast") -> Dict[str, Any]:
+        """
+        Запустить агент с заданным запросом и режимом
         
         Args:
-            api_key: Tavily API key
-            llm: Main LLM for the agent
-            prompt: System prompt
-            summary_llm: LLM for summarizing tool outputs
-            user_message: The user's original message for context in summarization
+            query: Поисковый запрос пользователя
+            mode: Режим работы ("fast", "deep", "social", "academic", "finance")
+            
+        Returns:
+            Словарь с результатами поиска
         """
-        if not api_key:
-            raise ValueError("Error: Tavily API key not provided.")
-
-        # Create the tools with the API key
-        search = TavilySearch(
-            max_results=10,
-            api_key=api_key,
-            include_favicon=True,
-            search_depth="advanced",
-            include_answer=False,
-        )
-
-        extract = TavilyExtract(
-            extract_depth="advanced",
-            api_key=api_key,
-            include_favicon=True,
-        )
-
-        crawl = TavilyCrawl(api_key=api_key, include_favicon=True, limit=15)
-        
-        output_summarizer = create_output_summarizer(summary_llm)
-        
-        class SummarizingTavilyExtract(TavilyExtract):
-            def _run(self, *args, **kwargs):
-                # Remove callback manager from kwargs to avoid Pydantic issues
-                kwargs.pop('run_manager', None)
-                result = super()._run(*args, **kwargs)
-                return output_summarizer(str(result), user_message)
+        # Выбор подходящего графа в зависимости от режима
+        if mode == "social":
+            workflow = self.build_social_graph()
+            system_prompt = SOCIAL_PROMPT
+        elif mode == "academic":
+            workflow = self.build_academic_graph()
+            system_prompt = ACADEMIC_PROMPT
+        elif mode == "finance":
+            workflow = self.build_finance_graph()
+            system_prompt = FINANCE_PROMPT
+        elif mode == "deep":
+            workflow = self.build_graph()
+            system_prompt = REASONING_PROMPT
+        else:  # fast/simple mode
+            workflow = self.build_graph()
+            system_prompt = SIMPLE_PROMPT
             
-            async def _arun(self, *args, **kwargs):
-                # Remove callback manager from kwargs to avoid Pydantic issues
-                kwargs.pop('run_manager', None)
-                result = await super()._arun(*args, **kwargs)
-                return output_summarizer(str(result), user_message)
+        # Компиляция графа
+        app = workflow.compile()
         
-        class SummarizingTavilyCrawl(TavilyCrawl):
-            def _run(self, *args, **kwargs):
-                # Remove callback manager from kwargs to avoid Pydantic issues
-                kwargs.pop('run_manager', None)
-                result = super()._run(*args, **kwargs)
-                output = output_summarizer(str(result), user_message)
-                return output
-            
-            async def _arun(self, *args, **kwargs):
-                # Remove callback manager from kwargs to avoid Pydantic issues
-                kwargs.pop('run_manager', None)
-                result = await super()._arun(*args, **kwargs)
-                output = output_summarizer(str(result), user_message)
-                return output
+        # Подготовка сообщений
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=query)
+        ]
         
-        extract_with_summary = SummarizingTavilyExtract(
-            extract_depth=extract.extract_depth,
-            api_key=api_key,
-            include_favicon=extract.include_favicon,
-            description=extract.description
-        )
+        # Запуск графа
+        result = app.invoke({"messages": messages})
         
-        crawl_with_summary = SummarizingTavilyCrawl(
-            api_key=api_key,
-            include_favicon=crawl.include_favicon,
-            limit=crawl.limit,
-            description=crawl.description
-        )
+        # Извлечение последнего сообщения
+        last_message = result["messages"][-1]
         
-        return create_react_agent(
-            prompt=prompt,
-            model=llm,
-            tools=[search, extract_with_summary, crawl_with_summary],
-            checkpointer=self.checkpointer,
-        )
+        # Агрегация и суммирование результатов
+        response_text = last_message.content if hasattr(last_message, 'content') else str(last_message)
+        
+        return {
+            "response": response_text,
+            "sources": []  # Источники будут добавлены в app.py
+        }
