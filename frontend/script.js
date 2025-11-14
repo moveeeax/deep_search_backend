@@ -16,7 +16,7 @@ const modeIndicator = document.getElementById('mode-indicator');
 const currentModeSpan = document.getElementById('current-mode');
 
 // Получить URL API из переменных окружения или использовать значение по умолчанию
-const API_URL = window.env ? window.env.API_URL : 'http://localhost:8000';
+const API_URL = window.env ? window.env.API_URL : 'http://bootcamp2025.tarassov.me';
 
 // Обработчики событий для кнопок режимов
 modeButtons.forEach(button => {
