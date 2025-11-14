@@ -415,4 +415,47 @@ header p {
     .info-cards {
         grid-template-columns: 1fr;
     }
+/* Markdown table styling */
+.markdown-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+}
+
+.markdown-table th,
+.markdown-table td {
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.markdown-table th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    text-align: left;
+}
+
+.markdown-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.markdown-table tr:hover {
+    background-color: #e9ecef;
+}
+
+.markdown-table th[align="center"],
+.markdown-table td[align="center"] {
+    text-align: center;
+}
+
+.markdown-table th[align="right"],
+.markdown-table td[align="right"] {
+    text-align: right;
+}
+
+.markdown-table th[align="left"],
+.markdown-table td[align="left"] {
+    text-align: left;
+}
 }

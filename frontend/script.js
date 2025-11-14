@@ -159,40 +159,97 @@ function displayResults(result) {
 // Функция для форматирования ответа
 function formatResponse(response) {
     if (typeof response === 'string') {
-        // Преобразовать markdown в HTML
-        let formatted = response
-            // Заголовки (h1-h6)
+        // Process tables first (most complex formatting)
+        let formatted = response;
+        
+        // Handle Markdown tables
+        const tableRegex = /(\|(?:[^\n]*\|)+\n\s*\|(?:\s*[-:]+\s*\|)+\n(?:\|(?:[^\n]*\|)+\n?)*)/g;
+        formatted = formatted.replace(tableRegex, function(match) {
+            // Split into lines
+            const lines = match.trim().split('\n');
+            
+            // Process header
+            const headers = lines[0].split('|').filter(cell => cell.trim() !== '').map(cell => cell.trim());
+            
+            // Process alignments from separator line
+            const alignments = lines[1].split('|').filter(cell => cell.trim() !== '').map(cell => {
+                const trimmed = cell.trim();
+                if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center';
+                if (trimmed.endsWith(':')) return 'right';
+                return 'left';
+            });
+            
+            // Process data rows
+            const dataRows = lines.slice(2).map(line =>
+                line.split('|').filter(cell => cell.trim() !== '').map(cell => cell.trim())
+            );
+            
+            // Generate HTML table
+            let tableHtml = '<table class="markdown-table">';
+            
+            // Header
+            tableHtml += '<thead><tr>';
+            headers.forEach((header, index) => {
+                const align = alignments[index] || 'left';
+                tableHtml += `<th align="${align}">${header}</th>`;
+            });
+            tableHtml += '</tr></thead>';
+            
+            // Body
+            tableHtml += '<tbody>';
+            dataRows.forEach(row => {
+                tableHtml += '<tr>';
+                row.forEach((cell, index) => {
+                    const align = alignments[index] || 'left';
+                    // Process inline markdown in cells
+                    let processedCell = cell
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                        .replace(/`(.*?)`/g, '<code>$1</code>')
+                        .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+                    tableHtml += `<td align="${align}">${processedCell}</td>`;
+                });
+                tableHtml += '</tr>';
+            });
+            tableHtml += '</tbody></table>';
+            
+            return tableHtml;
+        });
+        
+        // Process other markdown elements (existing functionality)
+        formatted = formatted
+            // Headers (h1-h6)
             .replace(/^###### (.*$)/gim, '<h6>$1</h6>')
             .replace(/^##### (.*$)/gim, '<h5>$1</h5>')
             .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
             .replace(/^### (.*$)/gim, '<h3>$1</h3>')
             .replace(/^## (.*$)/gim, '<h2>$1</h2>')
             .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-            // Жирный текст
+            // Bold text
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            // Курсив
+            // Italic
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            // Моноширинный текст
+            // Monospace
             .replace(/`(.*?)`/g, '<code>$1</code>')
-            // Горизонтальная линия
+            // Horizontal rule
             .replace(/^\s*---\s*$/gm, '<hr>')
-            // Списки
+            // Unordered lists
             .replace(/^- (.*?)(?=\n|$)/gm, '<li>$1</li>')
             .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-            // Нумерованные списки
+            // Ordered lists
             .replace(/^\d+\. (.*?)(?=\n|$)/gm, '<li>$1</li>')
             .replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>')
-            // Ссылки
+            // Links
             .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
         
-        // Разделить на абзацы
+        // Split into paragraphs
         const paragraphs = formatted.split('\n\n');
         return paragraphs.map(p => {
-            // Если абзац уже содержит HTML теги, не оборачиваем в <p>
-            if (/<(h[1-6]|ul|ol|li|hr|strong|em|code|a)/.test(p)) {
+            // If paragraph already contains HTML tags, don't wrap in <p>
+            if (/<(h[1-6]|ul|ol|li|hr|strong|em|code|a|table|thead|tbody|tr|th|td)/.test(p)) {
                 return p;
             }
-            // Иначе оборачиваем в <p>
+            // Otherwise wrap in <p>
             return `<p>${p.replace(/\n/g, '<br>')}</p>`;
         }).join('');
     }
