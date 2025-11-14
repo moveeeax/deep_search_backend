@@ -17,7 +17,13 @@
         <div class="mode-selector">
             <h2>Выберите режим поиска:</h2>
             <div class="mode-buttons">
-                <button id="fast-mode" class="mode-btn active" data-mode="fast">
+                <button id="auto-mode" class="mode-btn active" data-mode="auto">
+                    <i class="fas fa-robot"></i>
+                    <span>Авто-маршрутизация</span>
+                    <small>Интеллектуальный выбор режима</small>
+                </button>
+
+                <button id="fast-mode" class="mode-btn" data-mode="fast">
                     <i class="fas fa-bolt"></i>
                     <span>Быстрый поиск</span>
                     <small>ChatGPT-стиль, мгновенные ответы</small>
@@ -45,12 +51,6 @@
                     <i class="fas fa-chart-line"></i>
                     <span>Финансовый анализ</span>
                     <small>Данные из Yahoo Finance / TradingView</small>
-                </button>
-                
-                <button id="auto-mode" class="mode-btn" data-mode="auto">
-                    <i class="fas fa-robot"></i>
-                    <span>Авто-маршрутизация</span>
-                    <small>Интеллектуальный выбор режима</small>
                 </button>
             </div>
         </div>
@@ -102,6 +102,15 @@
             <h2>О режимах поиска</h2>
             <div class="info-cards">
                 <div class="info-card">
+                    <h3><i class="fas fa-robot"></i> Авто-маршрутизация</h3>
+                    <p>Интеллектуальный выбор режима поиска на основе анализа запроса.</p>
+                    <ul>
+                        <li>Автоматическое определение типа запроса</li>
+                        <li>Перенаправление в наиболее подходящий режим</li>
+                        <li>Интеллектуальная классификация запросов</li>
+                    </ul>
+                </div>
+                <div class="info-card">
                     <h3><i class="fas fa-bolt"></i> Быстрый поиск</h3>
                     <p>Идеален для простых вопросов, где требуется мгновенный ответ. Минимальная обработка для максимальной скорости.</p>
                     <ul>
@@ -151,16 +160,6 @@
                         <li>Финансовые отчеты и рыночный анализ</li>
                     </ul>
                 </div>
-            </div>
-            
-            <div class="info-card">
-                <h3><i class="fas fa-robot"></i> Авто-маршрутизация</h3>
-                <p>Интеллектуальный выбор режима поиска на основе анализа запроса.</p>
-                <ul>
-                    <li>Автоматическое определение типа запроса</li>
-                    <li>Перенаправление в наиболее подходящий режим</li>
-                    <li>Интеллектуальная классификация запросов</li>
-                </ul>
             </div>
         </div>
     </div>

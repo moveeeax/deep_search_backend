@@ -160,13 +160,41 @@ function displayResults(result) {
 function formatResponse(response) {
     if (typeof response === 'string') {
         // Преобразовать markdown в HTML
-        return response
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Жирный текст
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')              // Курсив
-            .replace(/^- (.*?)(?=\n|$)/gm, '<li>$1</li>')      // Список
-            .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')         // Обернуть список
-            .replace(/\n\n/g, '</p><p>')                       // Абзацы
-            .replace(/\n/g, '<br>');                           // Переносы строк
+        let formatted = response
+            // Заголовки (h1-h6)
+            .replace(/^###### (.*$)/gim, '<h6>$1</h6>')
+            .replace(/^##### (.*$)/gim, '<h5>$1</h5>')
+            .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            // Жирный текст
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            // Курсив
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            // Моноширинный текст
+            .replace(/`(.*?)`/g, '<code>$1</code>')
+            // Горизонтальная линия
+            .replace(/^\s*---\s*$/gm, '<hr>')
+            // Списки
+            .replace(/^- (.*?)(?=\n|$)/gm, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+            // Нумерованные списки
+            .replace(/^\d+\. (.*?)(?=\n|$)/gm, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>')
+            // Ссылки
+            .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+        
+        // Разделить на абзацы
+        const paragraphs = formatted.split('\n\n');
+        return paragraphs.map(p => {
+            // Если абзац уже содержит HTML теги, не оборачиваем в <p>
+            if (/<(h[1-6]|ul|ol|li|hr|strong|em|code|a)/.test(p)) {
+                return p;
+            }
+            // Иначе оборачиваем в <p>
+            return `<p>${p.replace(/\n/g, '<br>')}</p>`;
+        }).join('');
     }
     return JSON.stringify(response, null, 2);
 }
