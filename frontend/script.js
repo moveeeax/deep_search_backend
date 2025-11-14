@@ -80,6 +80,9 @@ async function performSearch(query, mode) {
         case 'finance':
             endpoint = '/search/finance';
             break;
+        case 'auto':
+            endpoint = '/search/auto';
+            break;
         default:
             endpoint = '/search/fast';
     }
@@ -136,6 +139,21 @@ function displayResults(result) {
     } else {
         factCheckSection.style.display = 'none';
     }
+    
+    // Если в результате указан выбранный режим (для авто-маршрутизации), показываем его
+    if (result.mode_selected) {
+        const modeNames = {
+            'fast': 'Быстрый поиск',
+            'deep': 'Глубокий анализ',
+            'social': 'Социальный анализ',
+            'academic': 'Академический поиск',
+            'finance': 'Финансовый анализ'
+        };
+        
+        const selectedModeName = modeNames[result.mode_selected] || result.mode_selected;
+        factCheckNotes.innerHTML = `<p>Автоматически выбран режим: ${selectedModeName}</p>`;
+        factCheckSection.style.display = 'block';
+    }
 }
 
 // Функция для форматирования ответа
@@ -180,7 +198,8 @@ function updateModeIndicator() {
         'deep': 'Глубокий анализ',
         'social': 'Социальный анализ',
         'academic': 'Академический поиск',
-        'finance': 'Финансовый анализ'
+        'finance': 'Финансовый анализ',
+        'auto': 'Авто-маршрутизация'
     };
     
     currentModeSpan.textContent = modeNames[currentMode] || 'Быстрый поиск';

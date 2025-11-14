@@ -11,7 +11,8 @@ from backend.prompts import (
     SOCIAL_PROMPT,
     ACADEMIC_PROMPT,
     FINANCE_PROMPT,
-    SUMMARIZER_PROMPT
+    SUMMARIZER_PROMPT,
+    ROUTING_PROMPT
 )
 from backend.utils import aggregate_and_summarize
 from langchain_tavily import TavilySearch, TavilyExtract, TavilyCrawl
@@ -331,3 +332,114 @@ class WebAgent:
             "response": response_text,
             "sources": []  # Источники будут добавлены в app.py
         }
+
+    def route_query(self, query: str) -> str:
+        """
+        Route query to appropriate search mode using rule-based classification.
+        Modes: 'fast', 'deep', 'social', 'academic', 'finance'
+        """
+        try:
+            # Convert to lowercase for case-insensitive matching
+            query_lower = query.lower()
+            
+            # Define keyword sets for each category
+            social_keywords = {
+                # Russian social networks and platforms
+                'вконтакте', 'vk', 'ok.ru', 'одноклассники', 'дзен', 'zen', ' rutube', 'youtube',
+                'reddit', 'twitter', 'facebook', 'instagram', 'linkedin', 'telegram', 'whatsapp',
+                'твиттер', 'фейсбук', 'инстаграм', 'линкедин', 'телеграм', 'вотсап', 'ватсап',
+                'сообщество', 'пользователи', 'обсуждение', 'пост', 'тренды', 'мнение', 'отзывы',
+                'подписчики', 'лайки', 'репосты', 'хабр', 'vc.ru', 'vc', 'tjournal', 'dtf',
+                'паблик', 'группа', 'канал', 'чат', 'форум', 'социальная сеть',
+                # English social networks and platforms
+                'social media', 'social network', 'community', 'users', 'discussion', 'post',
+                'trends', 'opinion', 'reviews', 'followers', 'likes', 'shares', 'group', 'channel',
+                'chat', 'forum', 'platform'
+            }
+            
+            academic_keywords = {
+                'научн', 'исследован', 'публикац', 'статья', 'paper', 'research', 'study', 'academic',
+                'arxiv', 'ieee', 'springer', 'elsevier', 'nature', 'science', 'jstor', 'acm', 'acl',
+                'conference', 'journal', 'thesis', 'диссертаци', 'магистерск', 'курсов', 'лекци',
+                'теори', 'алгоритм', 'метод', 'nlp', 'нейронн', 'машинн', 'обучен', 'ml', 'ai',
+                'computer science', 'математик', 'статистик', 'эксперимент', 'анализ', 'обзор',
+                # English academic terms
+                'scientific', 'publication', 'article', 'paper', 'research', 'study', 'academic',
+                'conference', 'journal', 'thesis', 'dissertation', 'master', 'course', 'lecture',
+                'theory', 'algorithm', 'method', 'computer science', 'mathematics', 'statistics',
+                'experiment', 'analysis', 'survey', 'review'
+            }
+            
+            finance_keywords = {
+                'цена', 'стоимость', 'стоит', 'акции', 'stock', 'share', 'investment', 'invest',
+                'рынок', 'биржа', 'трейдинг', 'trading', 'currency', 'валюта', 'доллар', 'euro',
+                'рубль', 'курс', 'exchange', 'forex', 'крипт', 'bitcoin', 'ethereum', 'btc', 'eth',
+                'wallet', 'кошелек', 'прибыль', 'доход', 'убыток', 'loss', 'profit', 'dividend',
+                'дивиденд', 'портфель', 'portfolio', 'etf', 'фонд', 'облигаци', 'credit', 'кредит',
+                'loan', 'заем', 'ипотек', 'mortgage', 'insurance', 'страхован', 'pension', 'пенси',
+                'налог', 'tax', 'budget', 'бюджет', 'экономик', 'inflation', 'инфляци', 'deflation',
+                'recession', 'рецесси', 'yahoo finance', 'marketwatch', 'bloomberg', 'reuters',
+                # English finance terms
+                'price', 'cost', 'stocks', 'shares', 'investment', 'invest', 'market', 'exchange',
+                'trading', 'currency', 'dollar', 'euro', 'ruble', 'rate', 'exchange rate', 'forex',
+                'crypto', 'bitcoin', 'ethereum', 'wallet', 'profit', 'income', 'loss', 'dividend',
+                'portfolio', 'etf', 'fund', 'bond', 'credit', 'loan', 'mortgage', 'insurance',
+                'pension', 'tax', 'budget', 'economics', 'inflation', 'deflation', 'recession'
+            }
+            
+            # Keywords indicating need for deep analysis
+            deep_analysis_indicators = {
+                'анализир', 'исслед', 'сравн', 'объясн', 'разбер', 'подробн', 'detail', 'analyze',
+                'compare', 'explain', 'comprehensive', 'thorough', 'in-depth', 'evaluate', 'assess',
+                'review', 'examine', 'study', 'investigate', 'scrutinize', 'dissect', 'elaborate',
+                'рассмотр', 'проанализир', 'изуч', 'оцени', 'провер', 'проверь', 'проверить',
+                # English deep analysis terms
+                'analyze', 'investigate', 'examine', 'study', 'review', 'evaluate', 'assess',
+                'compare', 'explain', 'comprehensive', 'thorough', 'in-depth', 'detailed',
+                'scrutinize', 'dissect', 'elaborate', 'explore', 'inspect', 'probe', 'delve'
+            }
+            
+            # Simple/fast query indicators (short, factual questions)
+            fast_query_indicators = {
+                'что такое', 'кто тако', 'какой', 'какая', 'какое', 'каков', 'какова', 'каково',
+                'где', 'когда', 'почему', 'зачем', 'сколько', 'как много', 'как мало', 'как часто',
+                'is', 'are', 'what', 'where', 'when', 'why', 'how', 'who', 'which', 'how much',
+                'how many', 'how often', 'what is', 'what are', 'where is', 'where are', 'каковы',
+                # English fast query indicators
+                'what is', 'what are', 'who is', 'who are', 'where is', 'where are', 'when is',
+                'when are', 'why is', 'why are', 'how is', 'how are', 'what does', 'how does',
+                'what do', 'how do', 'define', 'definition', 'meaning', 'explain briefly'
+            }
+            
+            # Check for social network queries first (highest priority)
+            if any(keyword in query_lower for keyword in social_keywords):
+                return 'social'
+            
+            # Check for academic queries
+            if any(keyword in query_lower for keyword in academic_keywords):
+                return 'academic'
+            
+            # Check for finance queries
+            if any(keyword in query_lower for keyword in finance_keywords):
+                return 'finance'
+            
+            # Check for deep analysis queries
+            if any(keyword in query_lower for keyword in deep_analysis_indicators):
+                return 'deep'
+            
+            # Check for simple/fast queries
+            if any(keyword in query_lower for keyword in fast_query_indicators):
+                # Additional check: short queries are more likely to be fast
+                if len(query.split()) <= 6:
+                    return 'fast'
+            
+            # Default to fast for very short queries
+            if len(query.split()) <= 4:
+                return 'fast'
+                
+            # Default to deep for longer, unclassified queries
+            return 'deep'
+            
+        except Exception as e:
+            print(f"Routing error: {e}")
+            return 'fast'  # Safe fallback

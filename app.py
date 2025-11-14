@@ -222,5 +222,97 @@ def finance_search():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/search/auto', methods=['POST'])
+def auto_search():
+    """
+    Автоматическая маршрутизация - интеллектуальный выбор режима поиска
+    """
+    data = request.get_json()
+    query = data.get('query')
+    
+    if not query:
+        return jsonify({"error": "Query is required"}), 400
+    
+    try:
+        # Определение подходящего режима поиска
+        router_agent = WebAgent(model_type=os.getenv("MODEL_TYPE", "openai"))
+        selected_mode = router_agent.route_query(query)
+        
+        # Выполнение поиска в выбранном режиме
+        agent = WebAgent(model_type=os.getenv("MODEL_TYPE", "openai"))
+        result = agent.run(query, mode=selected_mode)
+        
+        # Получение источников в зависимости от режима
+        search_params = {
+            "max_results": 5
+        }
+        
+        # Настройка параметров поиска в зависимости от режима
+        if selected_mode == "social":
+            search_params.update({
+                "include_domains": ["reddit.com", "twitter.com", "x.com", "vk.com", "habr.com"],
+                "time_range": "week"
+            })
+        elif selected_mode == "academic":
+            search_params.update({
+                "include_domains": ["arxiv.org", "semanticscholar.org"],
+                "time_range": "year"
+            })
+        elif selected_mode == "finance":
+            search_params.update({
+                "topic": "finance",
+                "include_domains": ["finance.yahoo.com", "bloomberg.com", "reuters.com"],
+                "time_range": "day"
+            })
+        elif selected_mode == "deep":
+            search_params.update({
+                "include_raw_content": True
+            })
+        
+        # Выполнение поиска для получения источников
+        search_results = tavily_client.search(query, **search_params)
+        
+        # Обработка источников
+        sources = []
+        contents = []
+        if 'results' in search_results:
+            for r in search_results['results']:
+                sources.append({
+                    "title": r.get('title', ''),
+                    "url": r.get('url', ''),
+                    "score": r.get('score', 0)
+                })
+                if r.get('raw_content') and selected_mode == "deep":
+                    contents.append(r['raw_content'])
+        
+        # Для глубокого анализа агрегируем и суммируем результаты
+        if selected_mode == "deep" and contents:
+            summary = aggregate_and_summarize(query, contents, tavily_client)
+            response_text = summary
+        else:
+            response_text = result["response"]
+        
+        # Подготовка ответа
+        response_data = {
+            "response": response_text,
+            "sources": sources,
+            "mode_selected": selected_mode
+        }
+        
+        # Добавляем специфичные для режима поля
+        if selected_mode == "deep":
+            response_data["fact_check_notes"] = "Проверка фактов выполнена с использованием нескольких источников"
+        elif selected_mode == "social":
+            response_data["analysis_type"] = "social_media_analysis"
+        elif selected_mode == "academic":
+            response_data["analysis_type"] = "academic_research"
+        elif selected_mode == "finance":
+            response_data["analysis_type"] = "financial_analysis"
+        
+        return jsonify(response_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
