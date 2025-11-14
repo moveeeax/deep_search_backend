@@ -11,7 +11,22 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/search/*": {
+        "origins": [
+            "http://localhost", 
+            "http://localhost:80", 
+            "http://localhost:8000",
+            "http://bootcamp2025.tarassov.me", 
+            "http://bootcamp2025.tarassov.me:8000"
+        ],
+        "methods": ["POST", "GET", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    },
+    r"/health": {
+        "origins": "*"
+    }
+})
 
 # Инициализация Tavily клиента
 tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
